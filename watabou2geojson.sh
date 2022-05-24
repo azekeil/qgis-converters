@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# convert layout.json from fantasytowngenerator.com to geoJSON format
+# convert saved json from https://watabou.github.io/city-generator to geoJSON format
 
 if [[ -z $1 ]]; then
     echo "expects filename as first parameter"

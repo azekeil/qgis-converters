@@ -2,6 +2,7 @@ import random
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterator
+from typing_extensions import Self
 
 import geojson
 import geopy.distance
@@ -20,9 +21,10 @@ def vary(value: float, variation: float) -> float:
     return value - v + random.random() * v * 2
 
 
-Point = list[Decimal]
+Point = tuple[Decimal, Decimal]
 
-Line = Point, Point
+Line = tuple[Point, Point]
+
 
 @dataclass
 class Polygon:
@@ -45,46 +47,45 @@ class Polygon:
 
 @dataclass
 class MyGeodesicLine:
-    a: Point
-    b: Point
+    start: Point
+    end: Point
 
     def length(self) -> float:
         """returns length in meters"""
-        return geopy.distance.geodesic(self.a,  self.b).meters
-    
-    def inverse(self):
-        return geod.Inverse(*self.a, *self.b)
+        return geopy.distance.geodesic(self.start,  self.end).meters
 
-    def coords(self, dist: float) -> Point:
-        d = geod.Direct(*self.a, self.inverse()['azi1'], dist)
-        return Point([d['lat2'], d['lon2']])
+    def position(self, dist: float) -> Self:
+        l = geod.InverseLine(*self.start, *self.end)
+        p = l.Position(dist)
+        return Self(Point((p['lat1'], p['lon1'])), Point((p['lat2'], p['lon2'])))
 
-    def waypoints(self, dist: float, variation: float) -> Iterator[GeodesicLine]:
-        l = geod.InverseLine(*self.a, *self.b)
-        s = 0.0
+    def waypoints(self, dist: float):
+        s = dist
+        start = self.start
+        end = self.end
+        l = geod.InverseLine(*start, *end)
         while s < l.s13:
-            g = l.Position(s)
-            yield g
-            s = min(s + vary(dist, variation), l.s13)
+            yield self.position(s)
+            s = min(s + dist, l.s13)
 
-    def segments(self, dist: float, variation: float) -> Iterator[GeodesicLine]:
-        start = self.a
-        end = self.b
+    def segments(self, dist: float, variation: float) -> Iterator[Line]:
+        start = self.start
+        end = self.end
         l = geod.InverseLine(*start, *end)
         s = dist
-        p = l.Position(s)
-        g = geod.InverseLine(*self.a, p['lat2'], p['lon2'])
-        yield g
         while s < l.s13:
+            p = l.Position(s)
+            start = Point((p['lat1'], p['lon1']))
+            end = Point((p['lat2'], p['lon2']))
+            yield Line((start, end))
+            start = end
             s = min(s + vary(dist, variation), l.s13)
-            p = g.Position(s)
-            g = geod.InverseLine(g.lat1, g.lon1, p['lat2'], p['lon2'])
-            yield g
+            l = geod.InverseLine(*start, *end)
 
 
-def ConstructBuilding(edge: GeodesicLine) -> Iterator[GeodesicLine]:
+def ConstructBuilding(edge: Line) -> Iterator[Line]:
     e = edge
-    for i in range(0,3):
+    for i in range(0, 3):
         print(i, e)
         yield geod.DirectLine(e.lat1, e.lon1, e.azi1, e.s13)
         e = geod.DirectLine(e.lat2, e.lon2, e.azi1 + 90, e.s13)
@@ -103,7 +104,7 @@ def GenerateBlock(polygon: Polygon, size: Decimal = 1, variation: Decimal = 0.1)
         l = MyGeodesicLine(start, end)
         print(l, l.length())
         for building_edge in l.segments(size, variation):
-            #print(list(ConstructBuilding(building_edge)))
+            # print(list(ConstructBuilding(building_edge)))
             print(building_edge)
         start = end
 

@@ -72,17 +72,14 @@ class MyGeodesicLine:
             yield self.position(s)
             s = min(s + dist, l.s13)
 
-    def segments(self, dist: float, variation: float) -> Iterator[Point]:
+    def segments(self, dist: float, variation: float) -> Iterator[Line]:
         s = 0
         l = geod.InverseLine(*self.start, *self.end)
-        yield Point(self.start)
         while s < l.s13:
             s = min(vary(dist, variation), l.s13)
-            p = l.Position(s)
-            start = Point((p['lat1'], p['lon1']))
-            end = Point((p['lat2'], p['lon2']))
-            yield end
-            start = end
+            d = Dict2Line(l.Position(s))
+            yield d
+            start = d[1]
             l = geod.InverseLine(*start, *self.end)
 
 

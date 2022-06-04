@@ -121,11 +121,8 @@ def convert2geojson(buildings) -> Iterator[geojson.Feature]:
         #print("Building: ", b)
         c = [[*s] for (s, _) in b]
         c += [c[0]]
-        print("Building coordinates: ", [c])
         p = geojson.Polygon(coordinates=[c], validate=True)
         g = geojson.Feature(id=i, geometry=p)
-        #g = geojson.Polygon(coordinates=c)
-        print(g)
         yield g
 
 
@@ -143,7 +140,7 @@ def main():
         # print(list(c))
         break
 
-    o = geojson.GeoJSON(convert2geojson(buildings))
+    o = geojson.FeatureCollection(list(convert2geojson(buildings)))
     with open('../../alextown-blocks.geojson', 'w') as fh:
         geojson.dump(o, fh)
 

@@ -45,6 +45,10 @@ class Polygon:
         return Point([totalx/i, totaly/i])
 
 
+def Dict2Line(d: dict) -> Line:
+    return Line((Point((d['lat1'], d['lon1'])), Point((d['lat2'], d['lon2']))))
+
+
 @dataclass
 class MyGeodesicLine:
     start: Point
@@ -68,27 +72,29 @@ class MyGeodesicLine:
             yield self.position(s)
             s = min(s + dist, l.s13)
 
-    def segments(self, dist: float, variation: float) -> Iterator[Line]:
-        start = self.start
-        end = self.end
-        l = geod.InverseLine(*start, *end)
-        s = dist
+    def segments(self, dist: float, variation: float) -> Iterator[Point]:
+        s = 0
+        l = geod.InverseLine(*self.start, *self.end)
+        yield Point(self.start)
         while s < l.s13:
+            s = min(vary(dist, variation), l.s13)
             p = l.Position(s)
             start = Point((p['lat1'], p['lon1']))
             end = Point((p['lat2'], p['lon2']))
-            yield Line((start, end))
+            yield end
             start = end
-            s = min(s + vary(dist, variation), l.s13)
-            l = geod.InverseLine(*start, *end)
+            l = geod.InverseLine(*start, *self.end)
 
 
-def ConstructBuilding(edge: Line) -> Iterator[Line]:
-    e = edge
-    for i in range(0, 3):
-        print(i, e)
-        yield geod.DirectLine(e.lat1, e.lon1, e.azi1, e.s13)
-        e = geod.DirectLine(e.lat2, e.lon2, e.azi1 + 90, e.s13)
+def ConstructBuilding(edge: Line, size: Decimal) -> Iterator[Point]:
+    start, end = edge
+    e = geod.Inverse(*start, *end)
+    yield Dict2Line(e)
+    for i in range(1, 3):
+        e = geod.Direct(*start, e['azi1'] + 90, size)
+        d = Dict2Line(e)
+        yield d
+        _, start = d
 
 
 def GenerateBlock(polygon: Polygon, size: Decimal = 1, variation: Decimal = 0.1):
@@ -104,21 +110,37 @@ def GenerateBlock(polygon: Polygon, size: Decimal = 1, variation: Decimal = 0.1)
         l = MyGeodesicLine(start, end)
         print(l, l.length())
         for building_edge in l.segments(size, variation):
-            # print(list(ConstructBuilding(building_edge)))
-            print(building_edge)
+            yield list(ConstructBuilding(building_edge, 1))
+            # print(list(ConstructBuilding(building_edge, 1)))
+            # print(building_edge)
+            break
         start = end
 
 
+def convert2geojson(buildings) -> Iterator[geojson.Feature]:
+    for b in buildings:
+        print("Building: ", b)
+        c = [(s, e) for (s, e) in b]
+        print("Building coordinates: ", c)
+        yield geojson.Feature(geometry=geojson.Polygon(coordinates=c))
+
+
 def main():
-    o: geojson.GeoJSON
+    i: geojson.GeoJSON
     with open('../../alextown.geo2.json') as fh:
-        o = geojson.load(fh)
+        i = geojson.load(fh)
+    buildings: list[Iterator[Line]] = []
     f: geojson.Feature
-    for f in o.get('features'):
-        GenerateBlock(Polygon(list(geojson.coords(f))))
+    for f in i.get('features'):
+        print("GeoJson input:", list(geojson.coords(f)))
+        buildings += GenerateBlock(Polygon(list(geojson.coords(f))))
         # c = geojson.coords(f)
         # print(list(c))
         break
+
+    o = geojson.GeoJSON(convert2geojson(buildings))
+    with open('../../alextown-blocks.geojson', 'w') as fh:
+        geojson.dump(o, fh)
 
 
 if __name__ == '__main__':

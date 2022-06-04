@@ -114,12 +114,16 @@ def GenerateBlock(polygon: Polygon, size: Decimal = 1, variation: Decimal = 0.1)
         start = end
 
 
-def convert2geojson(buildings) -> Iterator[geojson.Feature]:
+def convert2geojson(buildings) -> Iterator[geojson.Polygon]:
     for b in buildings:
-        print("Building: ", b)
-        c = [(s, e) for (s, e) in b]
-        print("Building coordinates: ", c)
-        yield geojson.Feature(geometry=geojson.Polygon(coordinates=c))
+        #print("Building: ", b)
+        c = [s for (s, _) in b]
+        c += c[0]
+        #print("Building coordinates: ", c)
+        #g = geojson.Feature(id=i, geometry=geojson.Polygon(coordinates=c))
+        g = geojson.Polygon(coordinates=c)
+        #print(g)
+        yield g
 
 
 def main():

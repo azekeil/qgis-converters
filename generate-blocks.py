@@ -1,6 +1,7 @@
 import random
 from dataclasses import dataclass
 from decimal import Decimal
+import time
 from typing import Iterator
 from typing_extensions import Self
 
@@ -83,12 +84,18 @@ class MyGeodesicLine:
             l = geod.InverseLine(*start, *self.end)
 
 
-def ConstructBuilding(edge: Line, size: Decimal) -> Iterator[Line]:
+def AngleDiff(a1, a2):
+    a = a1 - a2
+    return (a+180) % 360 - 180
+
+
+def ConstructBuilding(edge: Line, size: Decimal, turn: Decimal) -> Iterator[Line]:
     start, end = edge
     e = geod.Inverse(*start, *end)
-    #yield Dict2Line(e)
-    for _ in range(0, 4):
-        e = geod.Direct(*start, e['azi1'] + 90, size)
+    yield Dict2Line(e)
+    _, start = edge
+    for _ in range(0, 3):
+        e = geod.Direct(*start, e['azi1'] + turn, size)
         d = Dict2Line(e)
         yield d
         _, start = d
@@ -103,28 +110,35 @@ def GenerateBlock(polygon: Polygon, size: Decimal = 1, variation: Decimal = 0.1)
     coords_iter = polygon.coords()
     start: Point = next(coords_iter)
     end: Point
+
     for end in coords_iter:
         l = MyGeodesicLine(start, end)
         print(l, l.length())
+        # Make sure we draw inside the block and point towards the centre
+        e = geod.Inverse(*start, *end)
+        c = geod.Inverse(*start, *centre)
+        # pick whichever is closer to going towards the centre
+        turn = -90
+        if AngleDiff(c['azi1'], e['azi1'] + 90) > AngleDiff(c['azi1'], e['azi1'] - 90):
+            turn = 90
         for building_edge in l.segments(size, variation):
-            print(building_edge)
-            yield list(ConstructBuilding(building_edge, 1))
+            yield list(ConstructBuilding(building_edge, 1, turn))
             # print(list(ConstructBuilding(building_edge, 1)))
             # print(building_edge)
         start = end
-        break
 
 
 def convert2geojson(buildings) -> Iterator[geojson.Feature]:
     i = 0
     for b in buildings:
         i += 1
-        #print("Building: ", b)
+        print("Building: ", b)
         c = [[*s] for (s, _) in b]
         c += [c[0]]
-        p = geojson.Polygon(coordinates=[c], validate=True)
+        p = geojson.Polygon(coordinates=[c], validate=True, precision=8)
+        print("Polygon:", p)
         g = geojson.Feature(id=i, geometry=p, properties={
-                            "name": f"bld {i}"})
+                            "name": f"bld {i}", "generation_time": time.ctime()})
         yield g
 
 
@@ -135,15 +149,16 @@ def main():
     buildings: list[Iterator[Line]] = []
     f: geojson.Feature
     for f in i.get('features'):
-        print("GeoJson input:", list(geojson.coords(f)))
+        #print("GeoJson input:", list(geojson.coords(f)))
         #print(geojson.Polygon(coordinates=[[[a,b] for (a, b) in geojson.coords(f)]], validate=True))
-        buildings += GenerateBlock(Polygon(list(geojson.coords(f))), variation=0)
+        buildings += GenerateBlock(Polygon(list(geojson.coords(f))),
+                                   variation=0)
         # c = geojson.coords(f)
         # print(list(c))
         break
 
     o = geojson.FeatureCollection(list(convert2geojson(buildings)))
-    with open('../../alextown-blocks.geojson', 'w') as fh:
+    with open('../../public_html/alextown-blocks.geojson', 'w') as fh:
         geojson.dump(o, fh)
 
 

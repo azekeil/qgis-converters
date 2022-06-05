@@ -8,7 +8,10 @@ from typing_extensions import Self
 import geojson
 import geopy.distance
 from geographiclib.geodesic import Geodesic
-from geographiclib.geodesicline import GeodesicLine
+
+Point = tuple[Decimal, Decimal]
+
+Line = tuple[Point, Point]
 
 geod: Geodesic = Geodesic.WGS84  # define the WGS84 ellipsoid
 
@@ -20,11 +23,6 @@ def vary(value: float, variation: float) -> float:
     """
     v = variation * value
     return value - v + random.random() * v * 2
-
-
-Point = tuple[Decimal, Decimal]
-
-Line = tuple[Point, Point]
 
 
 @dataclass
@@ -123,8 +121,6 @@ def GenerateBlock(polygon: Polygon, size: Decimal = 1, variation: Decimal = 0.1)
             turn = 90
         for building_edge in l.segments(size, variation):
             yield list(ConstructBuilding(building_edge, 1, turn))
-            # print(list(ConstructBuilding(building_edge, 1)))
-            # print(building_edge)
         start = end
 
 
@@ -149,12 +145,8 @@ def main():
     buildings: list[Iterator[Line]] = []
     f: geojson.Feature
     for f in i.get('features'):
-        #print("GeoJson input:", list(geojson.coords(f)))
-        #print(geojson.Polygon(coordinates=[[[a,b] for (a, b) in geojson.coords(f)]], validate=True))
         buildings += GenerateBlock(Polygon(list(geojson.coords(f))),
                                    variation=0)
-        # c = geojson.coords(f)
-        # print(list(c))
         break
 
     o = geojson.FeatureCollection(list(convert2geojson(buildings)))

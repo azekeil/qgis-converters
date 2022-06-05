@@ -1,0 +1,7 @@
+autopep8==1.6.0
+geographiclib==1.52
+geojson==2.5.0
+geopy==2.2.0
+pycodestyle==2.8.0
+toml==0.10.2
+typing_extensions==4.2.0
